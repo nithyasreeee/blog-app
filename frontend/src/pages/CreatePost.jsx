@@ -6,20 +6,20 @@ import {
     Box,
     Typography,
     Paper,
-    Chip
+    IconButton
 } from '@mui/material';
+import { PhotoCamera } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../config/api';
 import { toast } from 'react-toastify';
 
 const CreatePost = () => {
     const [formData, setFormData] = useState({
         title: '',
-        content: '',
-        tags: [],
-        image: ''
+        content: ''
     });
-    const [tagInput, setTagInput] = useState('');
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [previewUrl, setPreviewUrl] = useState('');
     const navigate = useNavigate();
 
     const handleChange = (e) => {
@@ -29,33 +29,38 @@ const CreatePost = () => {
         });
     };
 
-    const handleTagInputKeyPress = (e) => {
-        if (e.key === 'Enter' && tagInput.trim()) {
-            e.preventDefault();
-            if (!formData.tags.includes(tagInput.trim())) {
-                setFormData({
-                    ...formData,
-                    tags: [...formData.tags, tagInput.trim()]
-                });
-            }
-            setTagInput('');
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setSelectedFile(file);
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setPreviewUrl(reader.result);
+            };
+            reader.readAsDataURL(file);
         }
-    };
-
-    const handleRemoveTag = (tagToRemove) => {
-        setFormData({
-            ...formData,
-            tags: formData.tags.filter(tag => tag !== tagToRemove)
-        });
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            const token = localStorage.getItem('token');
-            await axios.post('http://localhost:5000/api/posts', formData, {
-                headers: { Authorization: `Bearer ${token}` }
+            const formDataToSend = new FormData();
+            
+            // Append text fields
+            formDataToSend.append('title', formData.title);
+            formDataToSend.append('content', formData.content);
+            
+            // Append image if selected
+            if (selectedFile) {
+                formDataToSend.append('image', selectedFile);
+            }
+
+            await api.post('/posts', formDataToSend, {
+                headers: { 
+                    'Content-Type': 'multipart/form-data'
+                }
             });
+            
             toast.success('Post created successfully!');
             navigate('/');
         } catch (error) {
@@ -79,33 +84,36 @@ const CreatePost = () => {
                         required
                         sx={{ mb: 2 }}
                     />
-                    <TextField
-                        fullWidth
-                        label="Featured Image URL"
-                        name="image"
-                        value={formData.image}
-                        onChange={handleChange}
-                        sx={{ mb: 2 }}
-                    />
+                    
                     <Box sx={{ mb: 2 }}>
-                        <TextField
-                            fullWidth
-                            label="Add Tags (Press Enter)"
-                            value={tagInput}
-                            onChange={(e) => setTagInput(e.target.value)}
-                            onKeyPress={handleTagInputKeyPress}
-                            sx={{ mb: 1 }}
+                        <input
+                            accept="image/*"
+                            style={{ display: 'none' }}
+                            id="image-upload"
+                            type="file"
+                            onChange={handleFileChange}
                         />
-                        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                            {formData.tags.map(tag => (
-                                <Chip
-                                    key={tag}
-                                    label={tag}
-                                    onDelete={() => handleRemoveTag(tag)}
+                        <label htmlFor="image-upload">
+                            <Button
+                                variant="outlined"
+                                component="span"
+                                startIcon={<PhotoCamera />}
+                                sx={{ mb: 2 }}
+                            >
+                                Upload Image
+                            </Button>
+                        </label>
+                        {previewUrl && (
+                            <Box sx={{ mt: 2, mb: 2 }}>
+                                <img 
+                                    src={previewUrl} 
+                                    alt="Preview" 
+                                    style={{ maxWidth: '100%', maxHeight: '300px' }} 
                                 />
-                            ))}
-                        </Box>
+                            </Box>
+                        )}
                     </Box>
+
                     <Box sx={{ mb: 2 }}>
                         <Typography variant="subtitle1" gutterBottom>
                             Content
@@ -118,9 +126,11 @@ const CreatePost = () => {
                             name="content"
                             value={formData.content}
                             onChange={handleChange}
+                            required
                             sx={{ mb: 2 }}
                         />
                     </Box>
+
                     <Button
                         type="submit"
                         variant="contained"

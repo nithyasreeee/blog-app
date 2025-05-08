@@ -2,17 +2,52 @@ const express = require('express');
 const router = express.Router();
 const Post = require('../models/Post');
 const auth = require('../middleware/auth');
+const upload = require('../middleware/upload');
+const path = require('path');
+const fs = require('fs');
 
 // Create a new post
-router.post('/', auth, async (req, res) => {
+router.post('/', auth, upload.single('image'), async (req, res) => {
     try {
+        let imageUrl = '';
+        
+        if (req.file) {
+            try {
+                // Create uploads directory if it doesn't exist
+                const uploadsDir = path.join(__dirname, '../uploads');
+                if (!fs.existsSync(uploadsDir)) {
+                    fs.mkdirSync(uploadsDir, { recursive: true });
+                }
+
+                // Save file to uploads directory
+                const fileName = `${Date.now()}-${req.file.originalname}`;
+                const filePath = path.join(uploadsDir, fileName);
+                fs.writeFileSync(filePath, req.file.buffer);
+                
+                // Set the image URL to the local path
+                imageUrl = `/uploads/${fileName}`;
+            } catch (error) {
+                console.error('Error saving file:', error);
+                return res.status(500).json({ message: 'Error saving image' });
+            }
+        }
+
+        // Validate required fields
+        if (!req.body.title || !req.body.content) {
+            return res.status(400).json({ message: 'Title and content are required' });
+        }
+
         const post = new Post({
-            ...req.body,
-            author: req.user._id
+            title: req.body.title,
+            content: req.body.content,
+            author: req.user._id,
+            image: imageUrl
         });
+        
         await post.save();
         res.status(201).json(post);
     } catch (error) {
+        console.error('Error creating post:', error);
         res.status(400).json({ message: error.message });
     }
 });
